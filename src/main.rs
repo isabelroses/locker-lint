@@ -204,4 +204,27 @@ mod tests {
 
         assert_eq!(duplicates.len(), 2);
     }
+
+    #[test]
+    fn test_duplicates_2() -> Result<(), Box<dyn Error>> {
+        let flake_lock_contents = fs::read_to_string("test/flake-lock.json")?;
+        let flake_lock: FlakeLock = serde_json::from_str(&flake_lock_contents)?;
+
+        let inputs = parse_inputs(flake_lock);
+        let duplicates = find_duplicates(inputs);
+
+        assert_eq!(duplicates.len(), 13);
+        assert!(duplicates.contains_key("github:nixos/nixpkgs"));
+        assert_eq!(duplicates.get("github:nixos/nixpkgs").unwrap().len(), 6);
+
+        assert_eq!(
+            duplicates
+                .get("tarball:https://api.flakehub.com/f/pinned/edolstra/flake-compat/1.0.1/018afb31-abd1-7bff-a5e4-cff7e18efb7a/source.tar.gz")
+                .unwrap()
+                .len(),
+            1
+        );
+
+        Ok(())
+    }
 }
