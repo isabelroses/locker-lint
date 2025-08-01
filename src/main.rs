@@ -26,20 +26,21 @@ struct Node {
     locked: Option<Locked>,
 }
 
-#[derive(Deserialize, Debug)]
-struct Locked {
-    #[serde(rename = "type")]
-    node_type: String,
+#[derive(Deserialize, Debug, Eq, PartialEq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum Locked {
+    // scm
+    GitHub { owner: String, repo: String },
+    GitLab { owner: String, repo: String },
+    SourceHut { owner: String, repo: String },
 
-    // for github, gitlab and sourcehut we have these fields
-    owner: Option<String>,
-    repo: Option<String>,
-
-    // for git, hg and tarball we have these fields
-    url: Option<String>,
+    // url
+    Git { url: String },
+    Hg { url: String },
+    Tarball { url: String },
 
     // path
-    path: Option<String>,
+    Path { path: String },
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -76,11 +77,7 @@ fn parse_inputs(flake_lock: FlakeLock) -> HashMap<String, String> {
             continue;
         }
 
-        let val = flake_uri(v.locked.unwrap()).ok().unwrap_or_else(|| {
-            eprintln!("Failed to parse URI for input '{k}'");
-            String::new()
-        });
-
+        let val = flake_uri(v.locked.unwrap());
         data.entry(k).insert_entry(val);
     }
 
@@ -102,26 +99,28 @@ fn find_duplicates(inputs: HashMap<String, String>) -> HashMap<String, Vec<Strin
     duplicates
 }
 
-fn flake_uri(lock: Locked) -> Result<String, Box<dyn Error>> {
-    match lock.node_type.as_str() {
-        "github" | "gitlab" | "sourcehut" => Ok(format!(
-            "{}:{}/{}",
-            lock.node_type,
-            lock.owner.unwrap().to_lowercase(),
-            lock.repo.unwrap().to_lowercase()
-        )),
-        "git" | "hg" | "tarball" => Ok(format!(
-            "{}:{}",
-            lock.node_type,
-            lock.url.unwrap_or_default()
-        )),
-        "path" => Ok(format!(
-            "{}:{}",
-            lock.node_type,
-            lock.path.unwrap_or_default()
-        )),
-        _ => Err(format!("Unknown node type: {}", lock.node_type))?,
+fn flake_uri(lock: Locked) -> String {
+    match lock {
+        Locked::GitHub { owner, repo } => make_scm_uri("github", &owner, &repo),
+        Locked::GitLab { owner, repo } => make_scm_uri("gitlab", &owner, &repo),
+        Locked::SourceHut { owner, repo } => make_scm_uri("sourcehut", &owner, &repo),
+        Locked::Git { url } => make_url_uri("git", &url),
+        Locked::Hg { url } => make_url_uri("hg", &url),
+        Locked::Tarball { url } => make_url_uri("tarball", &url),
+        Locked::Path { path } => format!("path:{path}"),
     }
+}
+
+fn make_scm_uri(node_type: &str, owner: &str, repo: &str) -> String {
+    format!(
+        "{node_type}:{}/{}",
+        owner.to_lowercase(),
+        repo.to_lowercase()
+    )
+}
+
+fn make_url_uri(node_type: &str, url: &str) -> String {
+    format!("{node_type}:{url}")
 }
 
 #[cfg(test)]
