@@ -13,6 +13,7 @@ rustPlatform.buildRustPackage {
         ./Cargo.toml
         ./Cargo.lock
         ./src
+        ./test
       ]
     );
   };
